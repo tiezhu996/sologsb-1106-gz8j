@@ -9,6 +9,7 @@
   import { blockStore } from '../stores/blockStore'
   import { carverStore } from '../stores/carverStore'
   import { draftStore } from '../stores/draftStore'
+  import { woodStore } from '../stores/woodStore'
   import { useBlockOrder } from '../hooks/useBlockOrder'
   import { useCarverLoad } from '../hooks/useCarverLoad'
   import { validateColorSequence } from '../utils/seq'
@@ -34,7 +35,7 @@
   const draft = $derived($draftStore.find((item) => item.id === draftId) ?? null)
 
   onMount(() => {
-    void Promise.all([draftStore.load(), blockStore.load(), carverStore.load()])
+    void Promise.all([draftStore.load(), blockStore.load(), carverStore.load(), woodStore.load()])
   })
 
   $effect(() => {
@@ -57,8 +58,14 @@
   })
 
   function blockStateStage(state: Block['state']): number {
+    if (state === '待换料') return 2
     if (state === '待刻' || state === '在刻') return 3
     return 4
+  }
+
+  function segmentNote(block: Block): string {
+    if (!block.segmentId) return '未挂木段'
+    return $woodStore.find((segment) => segment.id === block.segmentId)?.segmentNo ?? '未挂木段'
   }
 
   function occupiedNumbers(exceptId: string): number[] {
@@ -76,7 +83,7 @@
   async function markCarved(block: Block): Promise<void> {
     await blockStore.update(block.id, { state: '已刻成' })
     await carverStore.releaseBlock(block.id)
-    const currentBlocks = get(blockStore).filter((item) => item.draftId === draftId)
+    const currentBlocks = get(blockStore).filter((item) => item.draftId === draftId && item.state !== '已更换')
     const allCarved = currentBlocks.every((item) => item.state === '已刻成' || item.state === '已修版')
     await draftStore.update(draftId, { status: allCarved ? '可印' : '刻版中' })
 
@@ -223,6 +230,7 @@
                   <td>
                     <strong>{block.woodType}</strong>
                     <small>{block.thicknessMm} mm</small>
+                    <small>{segmentNote(block)}</small>
                   </td>
                   <td>
                     <select
@@ -238,7 +246,9 @@
                   </td>
                   <td>
                     <span class="tag state-{block.state}">{block.state}</span>
-                    {#if block.state !== '已刻成' && block.state !== '已修版'}
+                    {#if block.state === '待换料'}
+                      <small>待木段追溯台换料后可刻</small>
+                    {:else if block.state !== '已刻成' && block.state !== '已修版'}
                       <button class="mini-button strong" type="button" onclick={() => markCarved(block)}>标刻成</button>
                     {/if}
                   </td>

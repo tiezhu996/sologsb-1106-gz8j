@@ -93,6 +93,9 @@
           carvedBy: '',
           state: '待刻',
           defectNote: '',
+          segmentId: '',
+          alias: '',
+          replacedById: '',
         })
       }
     })

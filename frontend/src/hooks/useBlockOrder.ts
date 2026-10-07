@@ -6,7 +6,9 @@ export function useBlockOrder(draftId: string | null) {
   const targetDraft = writable<string | null>(draftId)
 
   const blocks = derived([blockStore, targetDraft], ([$blocks, $draftId]) => {
-    const selected = $draftId ? $blocks.filter((block) => block.draftId === $draftId) : [...$blocks]
+    // 已更换的旧版不参与编排与刻成率，留在木段追溯里按别名查
+    const active = $blocks.filter((block) => block.state !== '已更换')
+    const selected = $draftId ? active.filter((block) => block.draftId === $draftId) : active
     return selected.sort((a, b) => a.draftId.localeCompare(b.draftId) || a.colorNo - b.colorNo)
   })
 

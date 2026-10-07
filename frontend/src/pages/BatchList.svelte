@@ -23,8 +23,13 @@
 
   const selectedDraft = $derived($draftStore.find((draft) => draft.id === draftId) ?? null)
   const selectedBlocks = $derived(
-    draftId ? [...$blockStore].filter((block) => block.draftId === draftId).sort((a, b) => a.colorNo - b.colorNo) : [],
+    draftId
+      ? [...$blockStore]
+          .filter((block) => block.draftId === draftId && block.state !== '已更换')
+          .sort((a, b) => a.colorNo - b.colorNo)
+      : [],
   )
+  const pendingReviewCount = $derived(batches.filter((batch) => batch.reviewState === '待复核').length)
 
   onMount(() => {
     void Promise.all([draftStore.load(), blockStore.load(), refreshBatches()])
@@ -79,6 +84,8 @@
       qty: Number(qty),
       pieceCount: Number(pieceCount),
       qcNote: qcNote.trim() ? `${qcNote.trim()}；${deviationText}` : deviationText,
+      reviewState: '有效',
+      reviewNote: '',
     })
 
     await refreshBatches()
@@ -94,13 +101,26 @@
   }
 
   async function exportArchive(): Promise<void> {
-    const [drafts, blocks, carvers, nodes] = await Promise.all([
+    const [drafts, blocks, carvers, nodes, segments, cracks, reviews] = await Promise.all([
       db.drafts.toArray(),
       db.blocks.toArray(),
       db.carvers.toArray(),
       db.nodes.toArray(),
+      db.segments.toArray(),
+      db.cracks.toArray(),
+      db.reviews.toArray(),
     ])
-    downloadJson('木版年画工序档案.json', { exportedAt: new Date().toISOString(), drafts, blocks, batches, carvers, nodes })
+    downloadJson('木版年画工序档案.json', {
+      exportedAt: new Date().toISOString(),
+      drafts,
+      blocks,
+      batches,
+      carvers,
+      nodes,
+      segments,
+      cracks,
+      reviews,
+    })
   }
 </script>
 
@@ -123,7 +143,7 @@
 <section class="summary-strip four">
   <div><span>登记批次</span><strong data-testid="count-batch">{batches.length}</strong></div>
   <div><span>累计印数</span><strong>{batches.reduce((sum, batch) => sum + batch.qty, 0)}</strong></div>
-  <div><span>覆盖画稿</span><strong>{new Set(batches.map((batch) => batch.draftId)).size}</strong></div>
+  <div><span>待复核批次</span><strong data-testid="count-batch-pending">{pendingReviewCount}</strong></div>
   <div><span>在册画稿</span><strong>{$draftStore.length}</strong></div>
 </section>
 
@@ -224,6 +244,7 @@
           <span>{batch.printedAt.replace(/-/g, '.')}</span>
           <h2>{batch.batchNo}</h2>
           <p>{draftTitle(batch.draftId)} · {batch.paperBatch}</p>
+          <span class="tag review-{batch.reviewState}">{batch.reviewState}</span>
         </div>
         <div class="batch-counts">
           <div><span>总印数</span><strong>{batch.qty}</strong></div>
@@ -232,8 +253,25 @@
         <div class="batch-notes">
           <p><b>颜料胶量：</b>{batch.inkNote}</p>
           <p><b>套色检查：</b>{batch.qcNote}</p>
+          {#if batch.reviewNote}<p><b>复核依据：</b>{batch.reviewNote}</p>{/if}
         </div>
       </article>
     {/each}
   </section>
 {/if}
+
+<style>
+  .batch-number .tag {
+    margin-top: 0.5rem;
+  }
+
+  .tag.review-待复核 {
+    color: #fff;
+    background: var(--cinnabar);
+  }
+
+  .tag.review-已复核 {
+    color: #fff;
+    background: var(--jade);
+  }
+</style>
