@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { link } from 'svelte-spa-router'
   import EmptyBox from '../components/common/EmptyBox.svelte'
   import { draftStore } from '../stores/draftStore'
   import { blockStore } from '../stores/blockStore'
   import { buildDeviationNote } from '../utils/seq'
   import { downloadJson } from '../utils/export'
+  import { onArchiveChanged } from '../utils/broadcast'
   import { db } from '../utils/db'
   import type { PrintBatch } from '../types/batch'
 
@@ -28,7 +30,12 @@
 
   onMount(() => {
     void Promise.all([draftStore.load(), blockStore.load(), refreshBatches()])
+    return onArchiveChanged(() => {
+      void Promise.all([refreshBatches(), blockStore.load()])
+    })
   })
+
+  const pendingReviewCount = $derived(batches.filter((batch) => batch.reviewState === '待复核').length)
 
   async function refreshBatches(): Promise<void> {
     const records = await db.batches.toArray()
@@ -79,6 +86,7 @@
       qty: Number(qty),
       pieceCount: Number(pieceCount),
       qcNote: qcNote.trim() ? `${qcNote.trim()}；${deviationText}` : deviationText,
+      reviewState: '正常',
     })
 
     await refreshBatches()
@@ -94,13 +102,26 @@
   }
 
   async function exportArchive(): Promise<void> {
-    const [drafts, blocks, carvers, nodes] = await Promise.all([
+    const [drafts, blocks, carvers, nodes, woodLogs, cracks, batchReviews] = await Promise.all([
       db.drafts.toArray(),
       db.blocks.toArray(),
       db.carvers.toArray(),
       db.nodes.toArray(),
+      db.woodLogs.toArray(),
+      db.cracks.toArray(),
+      db.batchReviews.toArray(),
     ])
-    downloadJson('木版年画工序档案.json', { exportedAt: new Date().toISOString(), drafts, blocks, batches, carvers, nodes })
+    downloadJson('木版年画工序档案.json', {
+      exportedAt: new Date().toISOString(),
+      drafts,
+      blocks,
+      batches,
+      carvers,
+      nodes,
+      woodLogs,
+      cracks,
+      batchReviews,
+    })
   }
 </script>
 
@@ -122,10 +143,17 @@
 
 <section class="summary-strip four">
   <div><span>登记批次</span><strong data-testid="count-batch">{batches.length}</strong></div>
+  <div><span>待复核批次</span><strong data-testid="count-review">{pendingReviewCount}</strong></div>
   <div><span>累计印数</span><strong>{batches.reduce((sum, batch) => sum + batch.qty, 0)}</strong></div>
   <div><span>覆盖画稿</span><strong>{new Set(batches.map((batch) => batch.draftId)).size}</strong></div>
-  <div><span>在册画稿</span><strong>{$draftStore.length}</strong></div>
 </section>
+
+{#if pendingReviewCount > 0}
+  <a class="panel review-alert" use:link href="/cracks" data-testid="review-alert">
+    <strong>有 {pendingReviewCount} 批已印批次因木料裂纹转待复核</strong>
+    <span>前往裂纹工单台逐批复核，重刻或沿用原印样都须留依据 →</span>
+  </a>
+{/if}
 
 {#if showForm}
   <section class="panel form-panel" data-testid="form-batch">
@@ -224,6 +252,9 @@
           <span>{batch.printedAt.replace(/-/g, '.')}</span>
           <h2>{batch.batchNo}</h2>
           <p>{draftTitle(batch.draftId)} · {batch.paperBatch}</p>
+          {#if batch.reviewState === '待复核'}
+            <span class="tag review-tag">待复核</span>
+          {/if}
         </div>
         <div class="batch-counts">
           <div><span>总印数</span><strong>{batch.qty}</strong></div>

@@ -13,6 +13,8 @@ export interface DraftBlockStats {
 const statsByDraft = derived(blockList, ($blocks) => {
   const stats: Record<string, DraftBlockStats> = {}
   for (const block of $blocks) {
+    // 重刻后停用留档的旧版不再计入当前版片进度
+    if (block.state === '已停用') continue
     const current = stats[block.draftId] ?? { total: 0, carved: 0, rate: 0 }
     current.total += 1
     if (block.state === '已刻成' || block.state === '已修版') current.carved += 1

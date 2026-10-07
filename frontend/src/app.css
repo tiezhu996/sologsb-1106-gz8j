@@ -1185,3 +1185,505 @@ textarea:focus {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ---------------- 木料段追溯 / 裂纹工单 ---------------- */
+
+.tag.state-待换料,
+.tag.review-tag {
+  color: #fff;
+  background: var(--gold);
+}
+
+.tag.state-已停用 {
+  color: #655647;
+  background: #d8ccb9;
+}
+
+.tag.crack-badge {
+  color: #fff;
+  background: var(--cinnabar);
+}
+
+.tag.resolved-badge {
+  color: #fff;
+  background: var(--jade);
+}
+
+.tag.wood-version {
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+}
+
+.review-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 1.5rem;
+  text-decoration: none;
+  border-color: rgba(187, 132, 45, 0.55);
+  background: linear-gradient(135deg, rgba(255, 250, 240, 0.98), rgba(247, 230, 196, 0.9));
+}
+
+.review-alert strong {
+  color: var(--cinnabar-dark);
+}
+
+.review-alert span {
+  color: var(--ink-muted);
+  font-size: 0.84rem;
+}
+
+.woodlog-list,
+.crack-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.woodlog-card {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.woodlog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.woodlog-head h2 {
+  margin: 0.25rem 0 0.35rem;
+  font-size: 1.35rem;
+}
+
+.woodlog-meta {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.data-table.compact {
+  min-width: 42rem;
+  font-size: 0.8rem;
+}
+
+.data-table.compact th,
+.data-table.compact td {
+  padding: 0.55rem 0.5rem;
+}
+
+.attach-block {
+  border-top: 1px dashed var(--line-strong);
+  padding-top: 1rem;
+}
+
+.attach-block .section-title-row select {
+  width: auto;
+  min-width: 11rem;
+  min-height: 2.2rem;
+}
+
+.attach-candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+}
+
+.attach-option {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fffdf8;
+  cursor: pointer;
+}
+
+.attach-option input {
+  width: auto;
+  min-height: 0;
+}
+
+.attach-option span {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.attach-option em {
+  font-style: normal;
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+}
+
+.unassigned-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+  gap: 0.7rem;
+}
+
+.unassigned-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fffdf8;
+}
+
+.unassigned-row small {
+  color: var(--ink-muted);
+  margin-right: auto;
+}
+
+.unassigned-row select {
+  width: auto;
+  min-width: 10rem;
+  min-height: 2.2rem;
+}
+
+.wood-link {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.wood-link:hover {
+  color: var(--cinnabar);
+}
+
+tr.retired td {
+  opacity: 0.62;
+  background: rgba(216, 204, 185, 0.25);
+}
+
+/* ---------------- 裂纹工单 ---------------- */
+
+.pending-write {
+  margin-bottom: 1.5rem;
+  border-color: rgba(169, 52, 39, 0.45);
+  background: linear-gradient(135deg, rgba(255, 250, 240, 0.98), rgba(250, 228, 224, 0.92));
+}
+
+.pending-list {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.8rem;
+}
+
+.pending-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 1rem;
+  border: 1px dashed var(--cinnabar);
+  border-radius: var(--radius-md);
+  background: rgba(255, 253, 248, 0.9);
+}
+
+.pending-row span {
+  display: block;
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+  margin-top: 0.15rem;
+}
+
+.pending-row p {
+  margin: 0.3rem 0 0;
+  font-size: 0.84rem;
+  color: var(--ink-soft);
+}
+
+.conflict-box {
+  margin-bottom: 1.1rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--cinnabar);
+  border-radius: var(--radius-md);
+  background: rgba(169, 52, 39, 0.07);
+}
+
+.conflict-box h3 {
+  margin: 0 0 0.5rem;
+  color: var(--cinnabar-dark);
+}
+
+.conflict-box p {
+  margin: 0.35rem 0;
+  font-size: 0.86rem;
+  line-height: 1.65;
+}
+
+.impact-preview {
+  margin-top: 1rem;
+  padding: 0.9rem 1.1rem;
+  border-radius: var(--radius-md);
+  background: var(--paper-deep);
+}
+
+.impact-preview h3 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.impact-list {
+  margin: 0.55rem 0 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.84rem;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.crack-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.crack-card.open {
+  border-color: rgba(169, 52, 39, 0.4);
+}
+
+.crack-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: clamp(1rem, 2vw, 1.4rem);
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.crack-summary h2 {
+  margin: 0.25rem 0 0.3rem;
+  font-size: 1.15rem;
+}
+
+.crack-summary p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+}
+
+.crack-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+
+.expand-mark {
+  color: var(--cinnabar);
+  font-size: 0.8rem;
+}
+
+.crack-detail {
+  display: grid;
+  gap: 1.15rem;
+  padding: 0 clamp(1rem, 2vw, 1.4rem) 1.4rem;
+  border-top: 1px dashed var(--line-strong);
+}
+
+.scope-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding-top: 1.1rem;
+}
+
+.scope-col h3,
+.batch-review-block h3,
+.resolve-block h3,
+.resolved-record h3 {
+  margin: 0 0 0.7rem;
+  font-size: 0.95rem;
+}
+
+.scope-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.scope-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fffdf8;
+  font-size: 0.82rem;
+}
+
+.scope-list li.muted-row {
+  opacity: 0.6;
+}
+
+.scope-list small {
+  color: var(--ink-muted);
+}
+
+.node-scope {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.node-scope li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fffdf8;
+  font-size: 0.8rem;
+}
+
+.node-scope span {
+  color: var(--ink-muted);
+  font-size: 0.74rem;
+}
+
+.node-scope em {
+  color: var(--ink-soft);
+  font-style: normal;
+  font-size: 0.74rem;
+}
+
+.review-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.review-row {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #fffdf8;
+}
+
+.review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.review-head span {
+  display: block;
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  margin-top: 0.15rem;
+}
+
+.review-basis {
+  margin: 0.55rem 0 0;
+  font-size: 0.83rem;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.review-basis small {
+  display: block;
+  color: var(--ink-muted);
+  margin-top: 0.2rem;
+}
+
+.review-form {
+  display: grid;
+  grid-template-columns: 11rem 1fr auto;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+  align-items: center;
+}
+
+.review-form input,
+.review-form select {
+  min-height: 2.5rem;
+}
+
+.resolve-block,
+.resolved-record {
+  padding-top: 1rem;
+  border-top: 1px dashed var(--line-strong);
+}
+
+.resolved-record p {
+  margin: 0.3rem 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  line-height: 1.65;
+}
+
+.lineage-panel {
+  margin-bottom: 1.25rem;
+}
+
+.lineage-chain {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.lineage-item {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fffdf8;
+  text-decoration: none;
+}
+
+.lineage-item.active {
+  border-color: var(--cinnabar);
+  box-shadow: 0 0 0 2px rgba(169, 52, 39, 0.1);
+}
+
+.lineage-item.retired {
+  background: var(--paper-deep);
+}
+
+.lineage-item small {
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+}
+
+.lineage-arrow {
+  color: var(--ink-muted);
+}
+
+@media (max-width: 1080px) {
+  .scope-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .review-form {
+    grid-template-columns: 1fr;
+  }
+}

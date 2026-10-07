@@ -57,6 +57,7 @@ async function assignBlock(block: Block, carverId: string): Promise<void> {
     }
     await db.blocks.update(block.id, {
       carvedBy: nextCarver.name,
+      // 待换料版片须等裂纹工单处置（重刻/沿用）后才能恢复，指派刻工不改变其状态
       state: block.state === '待刻' ? '在刻' : block.state,
     })
   })

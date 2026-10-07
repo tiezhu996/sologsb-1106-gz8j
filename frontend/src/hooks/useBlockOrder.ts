@@ -11,9 +11,11 @@ export function useBlockOrder(draftId: string | null) {
   })
 
   const carvedRate = derived(blocks, ($blocks) => {
-    if ($blocks.length === 0) return 0
-    const carved = $blocks.filter((block) => block.state === '已刻成' || block.state === '已修版').length
-    return Math.round((carved / $blocks.length) * 100)
+    // 停用旧版留档但不计入当前刻成率
+    const active = $blocks.filter((block) => block.state !== '已停用')
+    if (active.length === 0) return 0
+    const carved = active.filter((block) => block.state === '已刻成' || block.state === '已修版').length
+    return Math.round((carved / active.length) * 100)
   })
 
   async function reorder(ordered: Array<Pick<Block, 'id' | 'colorNo'>>): Promise<void> {

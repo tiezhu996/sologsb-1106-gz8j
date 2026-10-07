@@ -9,6 +9,8 @@
   import { blockStore } from '../stores/blockStore'
   import { carverStore } from '../stores/carverStore'
   import { draftStore } from '../stores/draftStore'
+  import { woodLogStore } from '../stores/woodLogStore'
+  import { onArchiveChanged } from '../utils/broadcast'
   import { useBlockOrder } from '../hooks/useBlockOrder'
   import { useCarverLoad } from '../hooks/useCarverLoad'
   import { validateColorSequence } from '../utils/seq'
@@ -34,7 +36,10 @@
   const draft = $derived($draftStore.find((item) => item.id === draftId) ?? null)
 
   onMount(() => {
-    void Promise.all([draftStore.load(), blockStore.load(), carverStore.load()])
+    void Promise.all([draftStore.load(), blockStore.load(), carverStore.load(), woodLogStore.load()])
+    return onArchiveChanged(() => {
+      void Promise.all([blockStore.load(), carverStore.load(), woodLogStore.load()])
+    })
   })
 
   $effect(() => {
@@ -57,8 +62,13 @@
   })
 
   function blockStateStage(state: Block['state']): number {
-    if (state === '待刻' || state === '在刻') return 3
+    if (state === '待刻' || state === '在刻' || state === '待换料') return 3
     return 4
+  }
+
+  function woodLogLabel(block: Block): string {
+    if (!block.woodLogId) return '未挂木段'
+    return $woodLogStore.find((log) => log.id === block.woodLogId)?.logNo ?? '未知木段'
   }
 
   function occupiedNumbers(exceptId: string): number[] {
@@ -76,7 +86,7 @@
   async function markCarved(block: Block): Promise<void> {
     await blockStore.update(block.id, { state: '已刻成' })
     await carverStore.releaseBlock(block.id)
-    const currentBlocks = get(blockStore).filter((item) => item.draftId === draftId)
+    const currentBlocks = get(blockStore).filter((item) => item.draftId === draftId && item.state !== '已停用')
     const allCarved = currentBlocks.every((item) => item.state === '已刻成' || item.state === '已修版')
     await draftStore.update(draftId, { status: allCarved ? '可印' : '刻版中' })
 
@@ -168,10 +178,10 @@
   </div>
 
   <section class="summary-strip four">
-    <div><span>版片总数</span><strong>{$orderedBlocks.length}</strong></div>
+    <div><span>版片总数</span><strong>{$orderedBlocks.filter((block) => block.state !== '已停用').length}</strong></div>
     <div><span>刻成率</span><strong>{$blockCarvedRate}%</strong></div>
     <div><span>在刻版片</span><strong>{$orderedBlocks.filter((block) => block.state === '在刻').length}</strong></div>
-    <div><span>需修版片</span><strong>{$orderedBlocks.filter((block) => block.defectNote).length}</strong></div>
+    <div><span>待换料版片</span><strong>{$orderedBlocks.filter((block) => block.state === '待换料').length}</strong></div>
   </section>
 
   <div class="workbench-grid">
@@ -194,6 +204,7 @@
                 <th>色序</th>
                 <th>版片</th>
                 <th>木料 / 版厚</th>
+                <th>所属木段</th>
                 <th>刻工指派</th>
                 <th>状态</th>
                 <th>崩口与修补</th>
@@ -201,45 +212,63 @@
             </thead>
             <tbody>
               {#each $orderedBlocks as block, blockIndex (block.id)}
-                <tr data-testid="row-block">
+                <tr data-testid="row-block" class:retired={block.state === '已停用'}>
                   <td class="sequence-cell">
-                    {#if sequenceDraft[block.id] !== undefined}
-                      <SeqInput
-                        bind:value={sequenceDraft[block.id]}
-                        existing={occupiedNumbers(block.id)}
-                        label="序号"
-                        testid={`field-colorNo-${block.id}`}
-                      />
+                    {#if block.state !== '已停用'}
+                      {#if sequenceDraft[block.id] !== undefined}
+                        <SeqInput
+                          bind:value={sequenceDraft[block.id]}
+                          existing={occupiedNumbers(block.id)}
+                          label="序号"
+                          testid={`field-colorNo-${block.id}`}
+                        />
+                      {/if}
+                      <button class="mini-button" type="button" onclick={() => saveSequence(block)}>存序号</button>
+                      <div class="order-buttons">
+                        <button type="button" disabled={blockIndex === 0} onclick={() => moveBlock(block, -1)}>上移</button>
+                        <button type="button" disabled={blockIndex === $orderedBlocks.length - 1} onclick={() => moveBlock(block, 1)}>下移</button>
+                      </div>
+                    {:else}
+                      <span class="tag state-已停用">已停用旧版</span>
                     {/if}
-                    <button class="mini-button" type="button" onclick={() => saveSequence(block)}>存序号</button>
-                    <div class="order-buttons">
-                      <button type="button" disabled={blockIndex === 0} onclick={() => moveBlock(block, -1)}>上移</button>
-                      <button type="button" disabled={blockIndex === $orderedBlocks.length - 1} onclick={() => moveBlock(block, 1)}>下移</button>
-                    </div>
                   </td>
                   <td>
                     <ColorSwatch colorNo={block.colorNo} blockName={block.blockName} />
+                    {#if block.alias}<small>别名：{block.alias}</small>{/if}
                   </td>
                   <td>
                     <strong>{block.woodType}</strong>
                     <small>{block.thicknessMm} mm</small>
                   </td>
                   <td>
-                    <select
-                      data-testid={`field-carvedBy-${block.id}`}
-                      value={block.carvedBy}
-                      onchange={(event) => assignCarver(block, (event.currentTarget as HTMLSelectElement).value)}
-                    >
-                      <option value="">待指派</option>
-                      {#each $carverStore as carver}
-                        <option value={carver.name}>{carver.name} · {carver.specialty}</option>
-                      {/each}
-                    </select>
+                    <a class="wood-link" use:link href="/woodlogs">{woodLogLabel(block)}</a>
+                    {#if block.woodLogId}
+                      <a class="mini-button" use:link href={`/cracks/new?woodLogId=${block.woodLogId}`}>报此段裂纹</a>
+                    {/if}
+                  </td>
+                  <td>
+                    {#if block.state !== '已停用'}
+                      <select
+                        data-testid={`field-carvedBy-${block.id}`}
+                        value={block.carvedBy}
+                        onchange={(event) => assignCarver(block, (event.currentTarget as HTMLSelectElement).value)}
+                      >
+                        <option value="">待指派</option>
+                        {#each $carverStore as carver}
+                          <option value={carver.name}>{carver.name} · {carver.specialty}</option>
+                        {/each}
+                      </select>
+                    {:else}
+                      <small>{block.carvedBy || '—'}</small>
+                    {/if}
                   </td>
                   <td>
                     <span class="tag state-{block.state}">{block.state}</span>
-                    {#if block.state !== '已刻成' && block.state !== '已修版'}
+                    {#if block.state !== '已刻成' && block.state !== '已修版' && block.state !== '已停用' && block.state !== '待换料'}
                       <button class="mini-button strong" type="button" onclick={() => markCarved(block)}>标刻成</button>
+                    {/if}
+                    {#if block.replacedByBlockId}
+                      <a class="mini-button strong" use:link href={`/blocks/${block.replacedByBlockId}/nodes`}>查重刻新版</a>
                     {/if}
                   </td>
                   <td>
@@ -253,7 +282,7 @@
                   </td>
                 </tr>
                 <tr class="stage-row">
-                  <td colspan="6">
+                  <td colspan="7">
                     <StageRail
                       activeIndex={blockStateStage(block.state)}
                       completedCount={block.state === '已刻成' || block.state === '已修版' ? 5 : block.state === '在刻' ? 3 : 1}

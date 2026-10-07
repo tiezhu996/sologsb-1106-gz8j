@@ -4,12 +4,17 @@
   import EmptyBox from '../components/common/EmptyBox.svelte'
   import StageRail from '../components/common/StageRail.svelte'
   import { blockStore } from '../stores/blockStore'
+  import { woodLogStore } from '../stores/woodLogStore'
+  import { onArchiveChanged } from '../utils/broadcast'
+  import { blockLineage } from '../utils/trace'
   import { db } from '../utils/db'
   import type { ProcessNode, ProcessStage } from '../types/node'
 
   const stages: ProcessStage[] = ['起稿', '勾描', '上样', '刻版', '修版', '调色', '套印', '晾晒']
   const blockId = $derived($params?.id ?? '')
   const block = $derived($blockStore.find((item) => item.id === blockId) ?? null)
+  const lineage = $derived(blockLineage($blockStore, blockId))
+  const woodLog = $derived(block?.woodLogId ? $woodLogStore.find((log) => log.id === block.woodLogId) ?? null : null)
 
   let nodes = $state<ProcessNode[]>([])
   let operator = $state('')
@@ -30,7 +35,10 @@
   const nextStage = $derived(stages.find((stage) => !nodes.some((node) => node.stage === stage)) ?? null)
 
   onMount(() => {
-    void Promise.all([blockStore.load(), loadNodes()])
+    void Promise.all([blockStore.load(), woodLogStore.load(), loadNodes()])
+    return onArchiveChanged(() => {
+      void Promise.all([blockStore.load(), woodLogStore.load(), loadNodes()])
+    })
   })
 
   $effect(() => {
@@ -47,6 +55,14 @@
 
   async function advanceNode(): Promise<void> {
     if (!nextStage || !block) return
+    if (block.state === '已停用') {
+      feedback = '旧版已停用留档，已刻节点保留可查；请在重刻新版上登记新节点。'
+      return
+    }
+    if (block.state === '待换料') {
+      feedback = '版片处于待换料，须先在裂纹工单台处置后才能继续登记节点。'
+      return
+    }
     if (!operator.trim()) {
       feedback = '请先填写操作人。'
       return
@@ -124,10 +140,33 @@
     <div>
       <p class="eyebrow">单块版片工序</p>
       <h1>{block.blockName}工序节点时间线</h1>
-      <p>{block.woodType} · 版厚 {block.thicknessMm} mm · 当前 {block.state}</p>
+      <p>{block.woodType} · 版厚 {block.thicknessMm} mm · 当前 {block.state}{#if woodLog} · 木段 {woodLog.logNo}{/if}</p>
     </div>
     <a class="button ghost" use:link href={`/drafts/${block.draftId}/blocks`}>返回版片编排台</a>
   </div>
+
+  {#if block.alias || block.replacedByBlockId || block.replacesBlockId}
+    <section class="panel lineage-panel" data-testid="lineage-panel">
+      <div class="panel-heading">
+        <div><span class="section-kicker">重刻谱系</span><h2>旧版留别名，新旧可互查</h2></div>
+      </div>
+      <div class="lineage-chain">
+        {#each lineage as item, index (item.id)}
+          {#if index > 0}<span class="lineage-arrow">→</span>{/if}
+          <a
+            class="lineage-item"
+            class:active={item.id === block.id}
+            class:retired={item.state === '已停用'}
+            use:link
+            href={`/blocks/${item.id}/nodes`}
+          >
+            <strong>{item.alias ?? item.blockName}</strong>
+            <small>{item.state}</small>
+          </a>
+        {/each}
+      </div>
+    </section>
+  {/if}
 
   <section class="panel">
     <div class="panel-heading">

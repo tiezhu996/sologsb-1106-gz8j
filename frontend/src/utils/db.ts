@@ -4,8 +4,31 @@ import type { Block } from '../types/block'
 import type { Carver } from '../types/carver'
 import type { PrintBatch } from '../types/batch'
 import type { ProcessNode } from '../types/node'
+import type { WoodLog } from '../types/woodLog'
+import type { CrackLog } from '../types/crack'
+import type { BatchReview } from '../types/batchReview'
 
 type StoredRecord = Record<string, unknown> & { schemaRev?: number }
+
+/** 种子版片到木段的固定挂接（老库升级时按编号补挂，新建库在种子数据里直接带好） */
+const seedWoodLogByBlock: Record<string, string> = {
+  'block-ms-01': 'wood-hy-01',
+  'block-ms-02': 'wood-lm-jia',
+  'block-ms-03': 'wood-lm-yi',
+  'block-ms-04': 'wood-lm-bing',
+  'block-zw-01': 'wood-hy-01',
+  'block-zw-02': 'wood-lm-jia',
+  'block-zw-03': 'wood-lm-yi',
+  'block-zw-04': 'wood-lm-bing',
+  'block-mk-01': 'wood-hy-01',
+  'block-mk-02': 'wood-lm-bing',
+  'block-mk-03': 'wood-lm-jia',
+  'block-mk-04': 'wood-lm-yi',
+  'block-ll-01': 'wood-hy-01',
+  'block-ll-02': 'wood-lm-jia',
+  'block-ll-03': 'wood-lm-bing',
+  'block-ll-04': 'wood-lm-yi',
+}
 
 class WoodprintDatabase extends Dexie {
   drafts!: Table<Draft, string>
@@ -13,6 +36,9 @@ class WoodprintDatabase extends Dexie {
   carvers!: Table<Carver, string>
   batches!: Table<PrintBatch, string>
   nodes!: Table<ProcessNode, string>
+  woodLogs!: Table<WoodLog, string>
+  cracks!: Table<CrackLog, string>
+  batchReviews!: Table<BatchReview, string>
 
   constructor() {
     super('gbwoodprint-db')
@@ -39,6 +65,45 @@ class WoodprintDatabase extends Dexie {
           await transaction.table(tableName).toCollection().modify((record: StoredRecord) => {
             record.schemaRev = 2
           })
+        }
+      })
+
+    // v3：木料段追溯——木段登记、版片挂段、裂纹工单、批次复核。
+    this.version(3)
+      .stores({
+        drafts: 'id, genre, status, title, schemaRev',
+        blocks:
+          'id, draftId, colorNo, carvedBy, state, woodLogId, replacedByBlockId, replacesBlockId, schemaRev',
+        carvers: 'id, specialty, skillLevel, name, schemaRev',
+        batches: 'id, draftId, batchNo, printedAt, reviewState, invalidatedByCrackId, schemaRev',
+        nodes: 'id, batchId, blockId, stage, seq, operator, schemaRev',
+        woodLogs: 'id, logNo, woodType, status, schemaRev',
+        cracks: 'id, woodLogId, blockId, draftId, status, clientToken, schemaRev',
+        batchReviews: 'id, batchId, crackId, reviewer, reviewedAt, schemaRev',
+      })
+      .upgrade(async (transaction) => {
+        for (const tableName of ['drafts', 'carvers', 'nodes'] as const) {
+          await transaction.table(tableName).toCollection().modify((record: StoredRecord) => {
+            record.schemaRev = 3
+          })
+        }
+
+        await transaction.table('blocks').toCollection().modify((record: StoredRecord) => {
+          record.schemaRev = 3
+          if (record.woodLogId === undefined && typeof record.id === 'string') {
+            const woodLogId = seedWoodLogByBlock[record.id]
+            if (woodLogId) record.woodLogId = woodLogId
+          }
+        })
+
+        await transaction.table('batches').toCollection().modify((record: StoredRecord) => {
+          record.schemaRev = 3
+          if (record.reviewState === undefined) record.reviewState = '正常'
+        })
+
+        const woodLogTable = transaction.table<WoodLog, string>('woodLogs')
+        if ((await woodLogTable.count()) === 0) {
+          await woodLogTable.bulkAdd(withSchemaRevision(woodLogs))
         }
       })
   }
@@ -83,26 +148,65 @@ const drafts: Draft[] = [
   },
 ]
 
+const woodLogs: WoodLog[] = [
+  {
+    id: 'wood-lm-jia',
+    logNo: '梨木-2511-甲段',
+    woodType: '梨木',
+    receivedAt: '2025-11-06',
+    sourceNote: '冬储一批梨木，开料时甲段端头可见内裂隐线，需沿段逐版排查。',
+    status: '在用',
+    woodVersion: 1,
+  },
+  {
+    id: 'wood-lm-yi',
+    logNo: '梨木-2511-乙段',
+    woodType: '梨木',
+    receivedAt: '2025-11-06',
+    sourceNote: '与甲段同批冬储梨木，顺丝开版，目前未见裂线。',
+    status: '在用',
+    woodVersion: 1,
+  },
+  {
+    id: 'wood-lm-bing',
+    logNo: '梨木-2512-丙段',
+    woodType: '梨木',
+    receivedAt: '2025-12-02',
+    sourceNote: '后进一批梨木中的丙段，质地偏紧，套色版多用此段。',
+    status: '在用',
+    woodVersion: 1,
+  },
+  {
+    id: 'wood-hy-01',
+    logNo: '黄杨-2510-主段',
+    woodType: '黄杨',
+    receivedAt: '2025-10-18',
+    sourceNote: '陈年黄杨大料，专开墨线版，木质密实无裂。',
+    status: '在用',
+    woodVersion: 1,
+  },
+]
+
 const blocks: Block[] = [
-  { id: 'block-ms-01', draftId: 'draft-menshen-qin', blockName: '墨线版', colorNo: 1, woodType: '黄杨', thicknessMm: 18, carvedBy: '齐师傅', state: '已刻成', defectNote: '胡须末梢修补一处，不影响线条落墨。' },
-  { id: 'block-ms-02', draftId: 'draft-menshen-qin', blockName: '黄版', colorNo: 2, woodType: '梨木', thicknessMm: 20, carvedBy: '周桂枝', state: '在刻', defectNote: '甲胄边线有一处浅崩口，已做嵌补。' },
-  { id: 'block-ms-03', draftId: 'draft-menshen-qin', blockName: '红版', colorNo: 3, woodType: '梨木', thicknessMm: 20, carvedBy: '陈小满', state: '待刻', defectNote: '' },
-  { id: 'block-ms-04', draftId: 'draft-menshen-qin', blockName: '绿版', colorNo: 4, woodType: '梨木', thicknessMm: 19, carvedBy: '秦木生', state: '待刻', defectNote: '' },
+  { id: 'block-ms-01', draftId: 'draft-menshen-qin', blockName: '墨线版', colorNo: 1, woodType: '黄杨', thicknessMm: 18, carvedBy: '齐师傅', state: '已刻成', defectNote: '胡须末梢修补一处，不影响线条落墨。', woodLogId: 'wood-hy-01' },
+  { id: 'block-ms-02', draftId: 'draft-menshen-qin', blockName: '黄版', colorNo: 2, woodType: '梨木', thicknessMm: 20, carvedBy: '周桂枝', state: '在刻', defectNote: '甲胄边线有一处浅崩口，已做嵌补。', woodLogId: 'wood-lm-jia' },
+  { id: 'block-ms-03', draftId: 'draft-menshen-qin', blockName: '红版', colorNo: 3, woodType: '梨木', thicknessMm: 20, carvedBy: '陈小满', state: '待刻', defectNote: '', woodLogId: 'wood-lm-yi' },
+  { id: 'block-ms-04', draftId: 'draft-menshen-qin', blockName: '绿版', colorNo: 4, woodType: '梨木', thicknessMm: 19, carvedBy: '秦木生', state: '待刻', defectNote: '', woodLogId: 'wood-lm-bing' },
 
-  { id: 'block-zw-01', draftId: 'draft-zaowang-siming', blockName: '墨线版', colorNo: 1, woodType: '黄杨', thicknessMm: 16, carvedBy: '秦木生', state: '已刻成', defectNote: '灶君衣纹清晰，无补版。' },
-  { id: 'block-zw-02', draftId: 'draft-zaowang-siming', blockName: '黄版', colorNo: 2, woodType: '梨木', thicknessMm: 18, carvedBy: '周桂枝', state: '在刻', defectNote: '供桌纹样局部跳刀，已顺线修平。' },
-  { id: 'block-zw-03', draftId: 'draft-zaowang-siming', blockName: '红版', colorNo: 3, woodType: '梨木', thicknessMm: 18, carvedBy: '陈小满', state: '待刻', defectNote: '' },
-  { id: 'block-zw-04', draftId: 'draft-zaowang-siming', blockName: '绿版', colorNo: 4, woodType: '梨木', thicknessMm: 17, carvedBy: '秦木生', state: '待刻', defectNote: '' },
+  { id: 'block-zw-01', draftId: 'draft-zaowang-siming', blockName: '墨线版', colorNo: 1, woodType: '黄杨', thicknessMm: 16, carvedBy: '秦木生', state: '已刻成', defectNote: '灶君衣纹清晰，无补版。', woodLogId: 'wood-hy-01' },
+  { id: 'block-zw-02', draftId: 'draft-zaowang-siming', blockName: '黄版', colorNo: 2, woodType: '梨木', thicknessMm: 18, carvedBy: '周桂枝', state: '在刻', defectNote: '供桌纹样局部跳刀，已顺线修平。', woodLogId: 'wood-lm-jia' },
+  { id: 'block-zw-03', draftId: 'draft-zaowang-siming', blockName: '红版', colorNo: 3, woodType: '梨木', thicknessMm: 18, carvedBy: '陈小满', state: '待刻', defectNote: '', woodLogId: 'wood-lm-yi' },
+  { id: 'block-zw-04', draftId: 'draft-zaowang-siming', blockName: '绿版', colorNo: 4, woodType: '梨木', thicknessMm: 17, carvedBy: '秦木生', state: '待刻', defectNote: '', woodLogId: 'wood-lm-bing' },
 
-  { id: 'block-mk-01', draftId: 'draft-muke-zhai', blockName: '墨线版', colorNo: 1, woodType: '黄杨', thicknessMm: 17, carvedBy: '齐师傅', state: '在刻', defectNote: '旗面转折处留刀待修。' },
-  { id: 'block-mk-02', draftId: 'draft-muke-zhai', blockName: '黄版', colorNo: 2, woodType: '梨木', thicknessMm: 20, carvedBy: '周桂枝', state: '待刻', defectNote: '' },
-  { id: 'block-mk-03', draftId: 'draft-muke-zhai', blockName: '红版', colorNo: 3, woodType: '梨木', thicknessMm: 20, carvedBy: '陈小满', state: '待刻', defectNote: '' },
-  { id: 'block-mk-04', draftId: 'draft-muke-zhai', blockName: '绿版', colorNo: 4, woodType: '梨木', thicknessMm: 19, carvedBy: '秦木生', state: '待刻', defectNote: '' },
+  { id: 'block-mk-01', draftId: 'draft-muke-zhai', blockName: '墨线版', colorNo: 1, woodType: '黄杨', thicknessMm: 17, carvedBy: '齐师傅', state: '在刻', defectNote: '旗面转折处留刀待修。', woodLogId: 'wood-hy-01' },
+  { id: 'block-mk-02', draftId: 'draft-muke-zhai', blockName: '黄版', colorNo: 2, woodType: '梨木', thicknessMm: 20, carvedBy: '周桂枝', state: '待刻', defectNote: '', woodLogId: 'wood-lm-bing' },
+  { id: 'block-mk-03', draftId: 'draft-muke-zhai', blockName: '红版', colorNo: 3, woodType: '梨木', thicknessMm: 20, carvedBy: '陈小满', state: '待刻', defectNote: '', woodLogId: 'wood-lm-jia' },
+  { id: 'block-mk-04', draftId: 'draft-muke-zhai', blockName: '绿版', colorNo: 4, woodType: '梨木', thicknessMm: 19, carvedBy: '秦木生', state: '待刻', defectNote: '', woodLogId: 'wood-lm-yi' },
 
-  { id: 'block-ll-01', draftId: 'draft-liannian-youyu', blockName: '墨线版', colorNo: 1, woodType: '黄杨', thicknessMm: 16, carvedBy: '齐师傅', state: '已修版', defectNote: '鱼鳞线加修一次，边缘改圆顺。' },
-  { id: 'block-ll-02', draftId: 'draft-liannian-youyu', blockName: '黄版', colorNo: 2, woodType: '梨木', thicknessMm: 18, carvedBy: '周桂枝', state: '已刻成', defectNote: '荷叶边缘有针尖小孔，不影响印面。' },
-  { id: 'block-ll-03', draftId: 'draft-liannian-youyu', blockName: '红版', colorNo: 3, woodType: '梨木', thicknessMm: 18, carvedBy: '陈小满', state: '已刻成', defectNote: '无补版。' },
-  { id: 'block-ll-04', draftId: 'draft-liannian-youyu', blockName: '绿版', colorNo: 4, woodType: '梨木', thicknessMm: 18, carvedBy: '秦木生', state: '已刻成', defectNote: '青绿地留白平净。' },
+  { id: 'block-ll-01', draftId: 'draft-liannian-youyu', blockName: '墨线版', colorNo: 1, woodType: '黄杨', thicknessMm: 16, carvedBy: '齐师傅', state: '已修版', defectNote: '鱼鳞线加修一次，边缘改圆顺。', woodLogId: 'wood-hy-01' },
+  { id: 'block-ll-02', draftId: 'draft-liannian-youyu', blockName: '黄版', colorNo: 2, woodType: '梨木', thicknessMm: 18, carvedBy: '周桂枝', state: '已刻成', defectNote: '荷叶边缘有针尖小孔，不影响印面。', woodLogId: 'wood-lm-jia' },
+  { id: 'block-ll-03', draftId: 'draft-liannian-youyu', blockName: '红版', colorNo: 3, woodType: '梨木', thicknessMm: 18, carvedBy: '陈小满', state: '已刻成', defectNote: '无补版。', woodLogId: 'wood-lm-bing' },
+  { id: 'block-ll-04', draftId: 'draft-liannian-youyu', blockName: '绿版', colorNo: 4, woodType: '梨木', thicknessMm: 18, carvedBy: '秦木生', state: '已刻成', defectNote: '青绿地留白平净。', woodLogId: 'wood-lm-yi' },
 ]
 
 const carvers: Carver[] = [
@@ -151,6 +255,7 @@ const batches: PrintBatch[] = [
     qty: 480,
     pieceCount: 4,
     qcNote: '墨线版：线条饱满；黄版：右下荷叶略轻；红版：娃娃衣襟套准；绿版：未见走版。',
+    reviewState: '正常',
   },
   {
     id: 'batch-ll-002',
@@ -162,6 +267,7 @@ const batches: PrintBatch[] = [
     qty: 320,
     pieceCount: 4,
     qcNote: '墨线版：清晰；黄版：套准；红版：左肩偏差约半线；绿版：荷叶边略重。',
+    reviewState: '正常',
   },
   {
     id: 'batch-ms-001',
@@ -173,6 +279,7 @@ const batches: PrintBatch[] = [
     qty: 120,
     pieceCount: 2,
     qcNote: '墨线版：样张无断线；黄版：肩甲外侧出现轻微走版，已重校定位。',
+    reviewState: '正常',
   },
 ]
 
@@ -194,7 +301,7 @@ const nodes: ProcessNode[] = [
 ]
 
 function withSchemaRevision<T extends object>(records: T[]): Array<T & { schemaRev: number }> {
-  return records.map((record) => ({ ...record, schemaRev: 2 }))
+  return records.map((record) => ({ ...record, schemaRev: 3 }))
 }
 
 export const db = new WoodprintDatabase()
@@ -202,6 +309,7 @@ export const db = new WoodprintDatabase()
 db.on('populate', () => {
   return Promise.all([
     db.drafts.bulkAdd(withSchemaRevision(drafts)),
+    db.woodLogs.bulkAdd(withSchemaRevision(woodLogs)),
     db.blocks.bulkAdd(withSchemaRevision(blocks)),
     db.carvers.bulkAdd(withSchemaRevision(carvers)),
     db.batches.bulkAdd(withSchemaRevision(batches)),
@@ -214,13 +322,27 @@ export async function initializeDatabase(): Promise<void> {
   const draftCount = await db.drafts.count()
   if (draftCount > 0) return
 
-  await db.transaction('rw', db.drafts, db.blocks, db.carvers, db.batches, db.nodes, async () => {
-    await db.drafts.bulkPut(withSchemaRevision(drafts))
-    await db.blocks.bulkPut(withSchemaRevision(blocks))
-    await db.carvers.bulkPut(withSchemaRevision(carvers))
-    await db.batches.bulkPut(withSchemaRevision(batches))
-    await db.nodes.bulkPut(withSchemaRevision(nodes))
-  })
+  await db.transaction(
+    'rw',
+    [
+      db.drafts,
+      db.woodLogs,
+      db.blocks,
+      db.carvers,
+      db.batches,
+      db.nodes,
+      db.cracks,
+      db.batchReviews,
+    ],
+    async () => {
+      await db.drafts.bulkPut(withSchemaRevision(drafts))
+      await db.woodLogs.bulkPut(withSchemaRevision(woodLogs))
+      await db.blocks.bulkPut(withSchemaRevision(blocks))
+      await db.carvers.bulkPut(withSchemaRevision(carvers))
+      await db.batches.bulkPut(withSchemaRevision(batches))
+      await db.nodes.bulkPut(withSchemaRevision(nodes))
+    },
+  )
 }
 
 export type { WoodprintDatabase }
